@@ -1,14 +1,16 @@
 use syn;
 use quote;
 
-use attrs::Attributes;
+use attrs::{ Attributes, FieldAttributes };
 
-pub fn expand(ast: &syn::MacroInput, attrs: &Attributes) -> quote::Tokens {
+pub fn expand(ast: &syn::MacroInput, attrs: &Attributes, field_attrs: &FieldAttributes) -> quote::Tokens {
     let name = &ast.ident;
-    let context = attrs.root
+
+    let context = attrs
         .get("context")
-        .map(|s: String| syn::parse_path(&s).unwrap())
+        .map(|s| syn::parse_type(s.into()).unwrap())
         .expect("#[derive(StompCommands)] must be used with #[stomp(context = \"SomeContext\")]");
+
     let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
     quote! {
         impl #impl_generics ::stomp::StompCommands for #name #ty_generics #where_clause {

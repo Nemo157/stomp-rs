@@ -2,43 +2,72 @@ use std::collections::{ BTreeMap, HashMap };
 
 use syn;
 
-use from_lit::FromLit;
+use attr::Attribute;
 
-pub struct AttributesMap(BTreeMap<String, syn::Lit>);
-
-pub struct Attributes {
-    pub root: AttributesMap,
-    pub fields: HashMap<syn::Ident, AttributesMap>,
+lazy_static! {
+    static ref EMPTY: Attributes = Attributes { map: BTreeMap::new() };
 }
 
-impl AttributesMap {
-    pub fn get<T>(&self, key: &str) -> Option<T> where T: FromLit {
-        self.0.get(key).and_then(<T as FromLit>::from_lit)
+pub struct Attributes {
+    map: BTreeMap<String, Attribute>,
+}
+
+pub struct FieldAttributes {
+    map: HashMap<syn::Ident, Attributes>,
+}
+
+impl Attributes {
+    pub fn get(&self, key: &str) -> Option<&Attribute> {
+        self.map.get(key)
+    }
+
+    pub fn get_bool(&self, key: &str) -> bool {
+        self.map.get(key).map(|a| a.into()).unwrap_or(false)
     }
 }
 
-fn extract_attrs_inner(attrs: &mut Vec<syn::Attribute>) -> AttributesMap {
+impl FieldAttributes {
+    pub fn get(&self, field: &syn::Field) -> &Attributes {
+        self.map.get(field.ident.as_ref().unwrap()).unwrap_or(&*EMPTY)
+    }
+}
+
+fn extract_attrs_inner(attrs: &mut Vec<syn::Attribute>) -> Attributes {
     let mut stomps = BTreeMap::new();
     attrs.retain(|attr| {
         if let syn::MetaItem::List(ref ident, ref values) = attr.value {
-            if ident != "stomp" || values.len() != 1 {
-                panic!("Invalid stomp attribute {}", quote!(#attr).to_string().replace(" ", ""));
-            }
-            if let syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref name, ref value)) = values[0] {
-                stomps.insert(name.to_string(), value.clone());
+            if ident == "stomp" {
+                for value in values {
+                    match *value {
+                        syn::NestedMetaItem::MetaItem(ref item) => match *item {
+                            syn::MetaItem::NameValue(ref name, ref value) => {
+                                stomps.insert(name.to_string(), Attribute::new(name.to_string(), value.clone()));
+                            }
+                            syn::MetaItem::Word(ref name) => {
+                                stomps.insert(name.to_string(), Attribute::new(name.to_string(), syn::Lit::Bool(true)));
+                            }
+                            syn::MetaItem::List(..) => {
+                                panic!("Invalid stomp attribute {} unexpected sublist", quote!(#attr).to_string().replace(" ", ""));
+                            }
+                        },
+                        syn::NestedMetaItem::Literal(_) => {
+                            panic!("Invalid stomp attribute {} literal value not supported", quote!(#attr).to_string().replace(" ", ""));
+                        },
+                    }
+                }
+                false
             } else {
-                panic!("Invalid stomp attribute {}", quote!(#attr).to_string().replace(" ", ""));
+                true
             }
-            false
         } else {
             true
         }
     });
-    AttributesMap(stomps)
+    Attributes { map: stomps }
 }
 
 /// Extracts all stomp attributes of the form #[stomp(i = V)]
-pub fn extract_attrs(ast: &mut syn::MacroInput) -> Attributes {
+pub fn extract_attrs(ast: &mut syn::MacroInput) -> (Attributes, FieldAttributes) {
     let root_attrs = extract_attrs_inner(&mut ast.attrs);
     let field_attrs = match ast.body {
         syn::Body::Enum(ref mut variants) => {
@@ -60,8 +89,5 @@ pub fn extract_attrs(ast: &mut syn::MacroInput) -> Attributes {
             HashMap::new()
         }
     };
-    Attributes {
-        root: root_attrs,
-        fields: field_attrs,
-    }
+    (root_attrs, FieldAttributes { map: field_attrs })
 }
