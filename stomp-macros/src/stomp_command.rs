@@ -1,36 +1,32 @@
 use syn;
 use quote;
 
-use attrs::{ self, Attributes, FieldAttributes };
-use field::Field;
+use attrs::{ Attributes, FieldAttributes };
+use field::{ Arg, Field };
 
-fn expand_arg(field: &Field) -> Option<quote::Tokens> {
-    if field.is_subcommand {
-        return None;
-    }
+fn expand_arg(arg: &Arg) -> quote::Tokens {
+    let name = arg.name;
 
-    let name = field.name;
+    let short = arg.short.as_ref().map(|s| quote! { .short(#s) });
 
-    let short = field.short.as_ref().map(|s| quote! { .short(#s) });
+    let long = arg.long.map(|s| quote! { .long(#s) });
 
-    let long = field.long.map(|s| quote! { .long(#s) });
-
-    let takes_value = if field.takes_value {
+    let takes_value = if arg.takes_value {
         Some(quote! { .takes_value(true) })
     } else {
         None
     };
 
-    Some(quote! {
+    quote! {
         ::clap::Arg::with_name(#name)
             #short
             #long
             #takes_value
-    })
+    }
 }
 
-fn expand_args(fields: &[Field]) -> quote::Tokens {
-    let args = fields.iter().filter_map(expand_arg);
+fn expand_args<'a, 'b: 'a, I>(args: I) -> quote::Tokens where I: Iterator<Item=&'a Arg<'b>> {
+    let args = args.map(expand_arg);
     quote! { .args(&[#(#args),*]) }
 }
 
@@ -59,7 +55,7 @@ fn expand_command(ast: &syn::MacroInput, attrs: &Attributes, field_attrs: &Field
         }
     };
 
-    let args = expand_args(&fields);
+    let args = expand_args(fields.iter().filter_map(|field| field.arg()));
 
     quote! {
         ::clap::App::new(#name)

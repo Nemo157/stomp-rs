@@ -2,17 +2,54 @@ use syn;
 
 use attrs::Attributes;
 
-pub struct Field<'a> {
+pub enum Field<'a> {
+    Arg(Arg<'a>),
+    Subcommand(Subcommand<'a>),
+}
+
+pub struct Arg<'a> {
     pub name: &'a str,
     pub short: Option<String>,
     pub long: Option<&'a str>,
     pub index: Option<u64>,
-    pub is_subcommand: bool,
     pub takes_value: bool,
+}
+
+pub struct Subcommand<'a> {
+    pub name: &'a str,
+    pub required: bool,
+}
+
+impl<'a> Field<'a> {
+    pub fn arg(&self) -> Option<&Arg> {
+        if let Field::Arg(ref arg) = *self {
+            Some(arg)
+        } else {
+            None
+        }
+    }
+
+    pub fn subcommand(&self) -> Option<&Subcommand> {
+        if let Field::Subcommand(ref subcommand) = *self {
+            Some(subcommand)
+        } else {
+            None
+        }
+    }
 }
 
 impl<'a> From<(&'a syn::Field, &'a Attributes)> for Field<'a> {
     fn from((field, attrs): (&'a syn::Field, &'a Attributes)) -> Field<'a> {
+        if attrs.get_bool("subcommand") {
+            Field::Subcommand(Subcommand::from((field, attrs)))
+        } else {
+            Field::Arg(Arg::from((field, attrs)))
+        }
+    }
+}
+
+impl<'a> From<(&'a syn::Field, &'a Attributes)> for Arg<'a> {
+    fn from((field, attrs): (&'a syn::Field, &'a Attributes)) -> Arg<'a> {
         let name = attrs.get("name").map(|a| a.into())
                 .unwrap_or_else(|| field.ident.as_ref().unwrap().as_ref());
 
@@ -40,14 +77,24 @@ impl<'a> From<(&'a syn::Field, &'a Attributes)> for Field<'a> {
             _ => panic!("unsupported field type {:?}", field.ty),
         };
 
-        Field {
+        Arg {
             name: name,
             short: short,
             long: long,
             index: index,
-            is_subcommand: attrs.get_bool("subcommand"),
             takes_value: attrs.get_bool("takes_value") || (!is_counter && !is_bool),
+        }
+    }
+}
 
+impl<'a> From<(&'a syn::Field, &'a Attributes)> for Subcommand<'a> {
+    fn from((field, attrs): (&'a syn::Field, &'a Attributes)) -> Subcommand<'a> {
+        let name = attrs.get("name").map(|a| a.into())
+                .unwrap_or_else(|| field.ident.as_ref().unwrap().as_ref());
+
+        Subcommand {
+            name: name,
+            required: false,
         }
     }
 }
