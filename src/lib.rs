@@ -27,3 +27,12 @@ impl<C> RunApp for C where C: StompCommand + Executor<Context = ()> {
         <C as Executor>::run(app, ());
     }
 }
+
+impl<C> StompCommands for Option<C> where C: StompCommands {
+    fn commands() -> Vec<clap::App<'static, 'static>> {
+        <C as StompCommands>::commands()
+    }
+    fn parse(matches: clap::ArgMatches) -> Self {
+        unimplemented!()
+    }
+}

@@ -15,7 +15,7 @@ pub fn expand(ast: &syn::MacroInput, attrs: &Attributes, field_attrs: &FieldAttr
     quote! {
         impl #impl_generics ::stomp::StompCommands for #name #ty_generics #where_clause {
             fn commands() -> ::std::vec::Vec<::clap::App<'static, 'static>> {
-                unimplemented!()
+                vec![]
             }
             fn parse(_matches: ::clap::ArgMatches) -> Self {
                 unimplemented!()

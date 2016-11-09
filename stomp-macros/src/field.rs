@@ -16,7 +16,7 @@ pub struct Arg<'a> {
 }
 
 pub struct Subcommand<'a> {
-    pub name: &'a str,
+    pub ty: &'a syn::Ty,
     pub required: bool,
 }
 
@@ -89,12 +89,30 @@ impl<'a> From<(&'a syn::Field, &'a Attributes)> for Arg<'a> {
 
 impl<'a> From<(&'a syn::Field, &'a Attributes)> for Subcommand<'a> {
     fn from((field, attrs): (&'a syn::Field, &'a Attributes)) -> Subcommand<'a> {
-        let name = attrs.get("name").map(|a| a.into())
-                .unwrap_or_else(|| field.ident.as_ref().unwrap().as_ref());
+        let (required, ty);
+        match field.ty {
+            syn::Ty::Path(None, ref path) => {
+                required = path.segments[0].clone() != "Option".into();
+                if required {
+                    ty = &field.ty;
+                } else {
+                    if let syn::PathParameters::AngleBracketed(ref params) = path.segments[0].parameters {
+                        ty = &params.types[0];
+                    } else {
+                        panic!();
+                    }
+                }
+            }
+            syn::Ty::Path(..) => {
+                required = false;
+                ty = &field.ty;
+            }
+            _ => panic!("unsupported field type {:?}", field.ty),
+        };
 
         Subcommand {
-            name: name,
-            required: false,
+            ty: ty,
+            required: required,
         }
     }
 }

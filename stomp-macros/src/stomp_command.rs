@@ -2,7 +2,7 @@ use syn;
 use quote;
 
 use attrs::{ Attributes, FieldAttributes };
-use field::{ Arg, Field };
+use field::{ Arg, Field, Subcommand };
 
 fn expand_arg(arg: &Arg) -> quote::Tokens {
     let name = arg.name;
@@ -11,23 +11,33 @@ fn expand_arg(arg: &Arg) -> quote::Tokens {
 
     let long = arg.long.map(|s| quote! { .long(#s) });
 
-    let takes_value = if arg.takes_value {
-        Some(quote! { .takes_value(true) })
-    } else {
-        None
-    };
+    let takes_value = arg.takes_value;
 
     quote! {
         ::clap::Arg::with_name(#name)
             #short
             #long
-            #takes_value
+            .takes_value(#takes_value)
     }
 }
 
 fn expand_args<'a, 'b: 'a, I>(args: I) -> quote::Tokens where I: Iterator<Item=&'a Arg<'b>> {
     let args = args.map(expand_arg);
     quote! { .args(&[#(#args),*]) }
+}
+
+fn expand_subcommand(subcommand: &Subcommand) -> quote::Tokens {
+    let ty = subcommand.ty;
+    let required = if subcommand.required {
+        Some(quote! { .setting(::clap::AppSettings::SubcommandRequiredElseHelp) })
+    } else {
+        None
+    };
+
+    quote! {
+        .subcommands(<#ty as ::stomp::StompCommands>::commands())
+        #required
+    }
 }
 
 fn expand_command(ast: &syn::MacroInput, attrs: &Attributes, field_attrs: &FieldAttributes) -> quote::Tokens {
@@ -56,12 +66,17 @@ fn expand_command(ast: &syn::MacroInput, attrs: &Attributes, field_attrs: &Field
     };
 
     let args = expand_args(fields.iter().filter_map(|field| field.arg()));
+    let subcommand = fields.iter()
+        .filter_map(|field| field.subcommand())
+        .find(|_| true)
+        .map(expand_subcommand);
 
     quote! {
         ::clap::App::new(#name)
             #version
             #author
             #args
+            #subcommand
     }
 }
 
