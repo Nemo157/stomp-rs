@@ -5,10 +5,11 @@ use syn;
 use attr::Attribute;
 
 lazy_static! {
-    static ref EMPTY: Attributes = Attributes { map: BTreeMap::new() };
+    static ref EMPTY: Attributes = Attributes { docs: "".into(), map: BTreeMap::new() };
 }
 
 pub struct Attributes {
+    pub docs: String,
     map: BTreeMap<String, Attribute>,
 }
 
@@ -63,19 +64,22 @@ fn extract_attrs_inner(attrs: &mut Vec<syn::Attribute>) -> Attributes {
             true
         }
     });
-    Attributes { map: stomps }
+
+    let docs = attrs.iter()
+        .filter(|a| a.is_sugared_doc)
+        .map(|a| match a.value {
+            syn::MetaItem::NameValue(_, syn::Lit::Str(ref doc, _)) => doc,
+            _ => unreachable!(),
+        })
+        .fold(String::new(), |docs, line| docs + line.trim_left_matches('/').trim() + "\n");
+
+    Attributes { docs: docs, map: stomps }
 }
 
 /// Extracts all stomp attributes of the form #[stomp(i = V)]
 pub fn extract_attrs(ast: &mut syn::MacroInput) -> (Attributes, FieldAttributes) {
     let root_attrs = extract_attrs_inner(&mut ast.attrs);
     let field_attrs = match ast.body {
-        syn::Body::Enum(ref mut variants) => {
-            variants
-                .iter_mut()
-                .map(|variant| (variant.ident.clone(), extract_attrs_inner(&mut variant.attrs)))
-                .collect()
-        }
         syn::Body::Struct(syn::VariantData::Struct(ref mut fields)) => {
             fields
                 .iter_mut()
@@ -85,7 +89,7 @@ pub fn extract_attrs(ast: &mut syn::MacroInput) -> (Attributes, FieldAttributes)
         syn::Body::Struct(syn::VariantData::Tuple(_)) => {
             panic!("TODO: tuple struct unsupported msg")
         }
-        syn::Body::Struct(syn::VariantData::Unit) => {
+        syn::Body::Struct(syn::VariantData::Unit) | syn::Body::Enum(_) => {
             HashMap::new()
         }
     };

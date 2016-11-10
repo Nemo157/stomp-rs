@@ -6,18 +6,23 @@ use field::{ Arg, Field, Subcommand };
 
 fn expand_arg(arg: &Arg) -> quote::Tokens {
     let name = arg.name;
-
     let short = arg.short.as_ref().map(|s| quote! { .short(#s) });
-
     let long = arg.long.map(|s| quote! { .long(#s) });
-
+    let value_name = arg.value_name.map(|s| quote! { .value_name(#s) });
     let takes_value = arg.takes_value;
+    let index = arg.index.map(|i| quote! { .index(#i) });
+    let ref docs = arg.docs;
+    let multiple = arg.multiple;
 
     quote! {
         ::clap::Arg::with_name(#name)
             #short
             #long
+            #value_name
+            #index
+            .help(#docs)
             .takes_value(#takes_value)
+            .multiple(#multiple)
     }
 }
 
@@ -71,12 +76,15 @@ fn expand_command(ast: &syn::MacroInput, attrs: &Attributes, field_attrs: &Field
         .find(|_| true)
         .map(expand_subcommand);
 
+    let ref docs = attrs.docs;
+
     quote! {
         ::clap::App::new(#name)
             #version
             #author
             #args
             #subcommand
+            .about(#docs)
     }
 }
 

@@ -11,8 +11,12 @@ pub struct Arg<'a> {
     pub name: &'a str,
     pub short: Option<String>,
     pub long: Option<&'a str>,
+    pub value_name: Option<&'a str>,
     pub index: Option<u64>,
+    pub docs: &'a str,
     pub takes_value: bool,
+    pub is_counter: bool,
+    pub multiple: bool,
 }
 
 pub struct Subcommand<'a> {
@@ -63,8 +67,10 @@ impl<'a> From<(&'a syn::Field, &'a Attributes)> for Arg<'a> {
             .or_else(|| if is_flag { Some(name) } else { None });
 
         let short = attrs.get("short").map(|s| (s.into(): char).to_string());
+        let value_name = attrs.get("value_name").map(|a| a.into());
 
-        let is_counter = attrs.get_bool("counter");
+        let is_counter = attrs.get_bool("counted");
+        let multiple = is_counter; // Or vec
 
         let is_bool;
         match field.ty {
@@ -82,6 +88,10 @@ impl<'a> From<(&'a syn::Field, &'a Attributes)> for Arg<'a> {
             short: short,
             long: long,
             index: index,
+            value_name: value_name,
+            docs: &attrs.docs,
+            is_counter: is_counter,
+            multiple: multiple,
             takes_value: attrs.get_bool("takes_value") || (!is_counter && !is_bool),
         }
     }
@@ -92,7 +102,7 @@ impl<'a> From<(&'a syn::Field, &'a Attributes)> for Subcommand<'a> {
         let (required, ty);
         match field.ty {
             syn::Ty::Path(None, ref path) => {
-                required = path.segments[0].clone() != "Option".into();
+                required = path.segments[0].ident != "Option";
                 if required {
                     ty = &field.ty;
                 } else {
