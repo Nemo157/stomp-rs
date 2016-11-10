@@ -6,6 +6,7 @@ use field::{ Arg, Field, Subcommand };
 
 fn expand_arg(arg: &Arg) -> quote::Tokens {
     let name = arg.name;
+    let ty = arg.ty;
     let short = arg.short.as_ref().map(|s| quote! { .short(#s) });
     let long = arg.long.map(|s| quote! { .long(#s) });
     let value_name = arg.value_name.map(|s| quote! { .value_name(#s) });
@@ -13,6 +14,21 @@ fn expand_arg(arg: &Arg) -> quote::Tokens {
     let index = arg.index.map(|i| quote! { .index(#i) });
     let ref docs = arg.docs;
     let multiple = arg.multiple;
+    let default_value = arg.default_value.map(|d| quote! { .default_value(#d) });
+    let min_values = arg.min_values.map(|m| quote! { .min_values(#m) });
+    let max_values = arg.max_values.map(|m| quote! { .max_values(#m) });
+    let required = arg.required;
+    let validator = if arg.takes_value {
+        Some(quote! {
+            .validator(|s| {
+                <#ty as ::std::str::FromStr>::from_str(&s)
+                    .map(|_| ())
+                    .map_err(|e| format!("failed to parse value {:?} for argument '{}': {}", s, #name, e))
+            })
+        })
+    } else {
+        None
+    };
 
     quote! {
         ::clap::Arg::with_name(#name)
@@ -23,6 +39,11 @@ fn expand_arg(arg: &Arg) -> quote::Tokens {
             .help(#docs)
             .takes_value(#takes_value)
             .multiple(#multiple)
+            #default_value
+            #min_values
+            #max_values
+            .required(#required)
+            #validator
     }
 }
 
@@ -33,10 +54,10 @@ fn expand_args<'a, 'b: 'a, I>(args: I) -> quote::Tokens where I: Iterator<Item=&
 
 fn expand_subcommand(subcommand: &Subcommand) -> quote::Tokens {
     let ty = subcommand.ty;
-    let required = if subcommand.required {
-        Some(quote! { .setting(::clap::AppSettings::SubcommandRequiredElseHelp) })
-    } else {
+    let required = if subcommand.is_optional {
         None
+    } else {
+        Some(quote! { .setting(::clap::AppSettings::SubcommandRequiredElseHelp) })
     };
 
     quote! {
@@ -78,10 +99,27 @@ fn expand_parse_arg(arg: &Arg, matches: &syn::Ident) -> quote::Tokens {
         quote! { #matches.occurrences_of(#name) }
     } else {
         if arg.takes_value {
-            if arg.required {
-                quote! { #matches.value_of(#name).unwrap().parse().unwrap() }
+            if arg.multiple {
+                quote! {
+                    #matches
+                        .values_of(#name)
+                        .map(|vs| vs.map(|v| v.parse().unwrap()).collect())
+                        .unwrap_or_else(|| Vec::new())
+                }
             } else {
-                quote! { #matches.value_of(#name).map(|a| a.parse().unwrap()) }
+                if arg.is_optional {
+                    quote! {
+                        #matches
+                            .value_of(#name)
+                            .map(|a| a.parse().unwrap())
+                    }
+                } else {
+                    quote! {
+                        #matches
+                            .value_of(#name).unwrap()
+                            .parse().unwrap()
+                    }
+                }
             }
         } else {
             quote! { #matches.is_present(#name) }
@@ -98,12 +136,12 @@ fn expand_parse_subcommand(cmd: &Subcommand, matches: &syn::Ident) -> quote::Tok
     let ty = cmd.ty;
 
     let (default, wrapper);
-    if cmd.required {
-        default = quote! { unreachable!() };
-        wrapper = None;
-    } else {
+    if cmd.is_optional {
         default = quote! { None };
         wrapper = Some(quote! { Some });
+    } else {
+        default = quote! { unreachable!() };
+        wrapper = None;
     }
 
     quote! {

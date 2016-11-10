@@ -18,6 +18,12 @@ impl<'a> Into<syn::Lit> for &'a Attribute {
     }
 }
 
+impl<'a> Into<&'a syn::Lit> for &'a Attribute {
+    fn into(self) -> &'a syn::Lit {
+        &self.value
+    }
+}
+
 impl<'a> Into<&'a str> for &'a Attribute {
     fn into(self) -> &'a str {
         if let syn::Lit::Str(ref value, _) = self.value {
