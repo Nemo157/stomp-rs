@@ -32,14 +32,8 @@ pub fn expand_commands(ast: &syn::MacroInput) -> quote::Tokens {
     quote! { vec![ #(<#commands as ::stomp::StompCommand>::command()),* ] }
 }
 
-pub fn expand(ast: &syn::MacroInput, attrs: &Attributes) -> quote::Tokens {
+pub fn expand(ast: &syn::MacroInput) -> quote::Tokens {
     let name = &ast.ident;
-
-    let context = attrs
-        .get("context")
-        .map(|s| syn::parse_type(s.into()).unwrap())
-        .expect("#[derive(StompCommands)] must be used with #[stomp(context = \"SomeContext\")]");
-
     let commands = expand_commands(ast);
     let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
     quote! {
@@ -48,13 +42,6 @@ pub fn expand(ast: &syn::MacroInput, attrs: &Attributes) -> quote::Tokens {
                 #commands
             }
             fn parse(_matches: ::clap::ArgMatches) -> Self {
-                unimplemented!()
-            }
-        }
-
-        impl #impl_generics ::stomp::Executor for #name #ty_generics #where_clause {
-            type Context = #context;
-            fn run(self, _context: Self::Context) {
                 unimplemented!()
             }
         }

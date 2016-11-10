@@ -7,7 +7,7 @@ extern crate stomp;
 #[macro_use]
 extern crate stomp_macros;
 
-use stomp::RunApp;
+use stomp::ParseApp;
 
 // Create an application with 5 possible arguments (2 auto generated) and 2 subcommands (1 auto generated)
 //    - A config file
@@ -54,7 +54,6 @@ pub struct MyApp {
 }
 
 #[derive(StompCommands)]
-#[stomp(context = "()")]
 pub enum Commands {
     Test(Test),
 }
@@ -67,52 +66,42 @@ pub struct Test {
     list: bool,
 }
 
-impl stomp::Executor for MyApp {
-    type Context = ();
-    fn run(self, _context: Self::Context) {
-        // You can check the value provided by positional arguments, or option arguments
-        if let Some(o) = self.output {
-            println!("Value for output: {}", o);
-        }
-
-        if let Some(c) = self.config {
-            println!("Value for config: {}", c);
-        }
-
-        // You can see how many times a particular flag or argument occurred
-        // Note, only flags can have multiple occurrences
-        match self.debug_level {
-            0 => println!("Debug mode is off"),
-            1 => println!("Debug mode is kind of on"),
-            2 => println!("Debug mode is on"),
-            3 | _ => println!("Don't be crazy"),
-        }
-
-        // You can check for the existence of subcommands, and if found use their
-        // matches just as you would the top level app
-        if let Some(subcommand) = self.subcommand {
-            subcommand.run(());
-        }
-
-        // Continued program logic goes here...
-    }
-}
-
-impl stomp::Executor for Test {
-    type Context = ();
-    fn run(self, _context: Self::Context) {
-        if self.list {
-            // "$ myapp test -l" was run
-            println!("Printing testing lists...");
-        } else {
-            // "$ myapp test" was run
-            println!("Not printing testing lists...");
-        }
-
-        // Continued program logic goes here...
-    }
-}
-
 fn main() {
-    MyApp::run_app();
+    let app = MyApp::parse();
+
+    // You can check the value provided by positional arguments, or option arguments
+    if let Some(o) = app.output {
+        println!("Value for output: {}", o);
+    }
+
+    if let Some(c) = app.config {
+        println!("Value for config: {}", c);
+    }
+
+    // You can see how many times a particular flag or argument occurred
+    // Note, only flags can have multiple occurrences
+    match app.debug_level {
+        0 => println!("Debug mode is off"),
+        1 => println!("Debug mode is kind of on"),
+        2 => println!("Debug mode is on"),
+        3 | _ => println!("Don't be crazy"),
+    }
+
+    // You can check for the existence of subcommands, and if found use their
+    // matches just as you would the top level app
+    match app.subcommand {
+        Some(Commands::Test(test)) => {
+            if test.list {
+                // "$ myapp test -l" was run
+                println!("Printing testing lists...");
+            } else {
+                // "$ myapp test" was run
+                println!("Not printing testing lists...");
+            }
+        }
+        None => {
+        }
+    }
+
+    // Continued program logic goes here...
 }

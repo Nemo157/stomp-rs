@@ -1,38 +1,32 @@
 extern crate clap;
 
-pub trait Executor {
-    type Context;
-    fn run(self, context: Self::Context);
-}
+use clap::{ App, ArgMatches };
 
 pub trait StompCommand {
-    fn command() -> clap::App<'static, 'static>;
-    fn parse(matches: clap::ArgMatches) -> Self;
+    fn command() -> App<'static, 'static>;
+    fn parse(matches: ArgMatches) -> Self;
 }
 
 pub trait StompCommands {
-    fn commands() -> Vec<clap::App<'static, 'static>>;
-    fn parse(matches: clap::ArgMatches) -> Self;
+    fn commands() -> Vec<App<'static, 'static>>;
+    fn parse(matches: ArgMatches) -> Self;
 }
 
-pub trait RunApp {
-    fn run_app();
+pub trait ParseApp {
+    fn parse() -> Self;
 }
 
-impl<C> RunApp for C where C: StompCommand + Executor<Context = ()> {
-    fn run_app() {
-        let app = <C as StompCommand>::command();
-        let matches = clap::App::get_matches(app);
-        let app = <C as StompCommand>::parse(matches);
-        <C as Executor>::run(app, ());
+impl<C> ParseApp for C where C: StompCommand {
+    fn parse() -> Self {
+        C::parse(App::get_matches(C::command()))
     }
 }
 
 impl<C> StompCommands for Option<C> where C: StompCommands {
-    fn commands() -> Vec<clap::App<'static, 'static>> {
-        <C as StompCommands>::commands()
+    fn commands() -> Vec<App<'static, 'static>> {
+        C::commands()
     }
-    fn parse(matches: clap::ArgMatches) -> Self {
-        unimplemented!()
+    fn parse(matches: ArgMatches) -> Self {
+        Some(C::parse(matches))
     }
 }
