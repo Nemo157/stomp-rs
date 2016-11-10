@@ -45,30 +45,13 @@ fn expand_subcommand(subcommand: &Subcommand) -> quote::Tokens {
     }
 }
 
-fn expand_command(ast: &syn::MacroInput, attrs: &Attributes, field_attrs: &FieldAttributes) -> quote::Tokens {
+fn expand_command(ast: &syn::MacroInput, attrs: &Attributes, fields: &[Field]) -> quote::Tokens {
     let name = attrs.get("name").map(|a| a.into())
             .unwrap_or_else(|| syn::Lit::from(ast.ident.as_ref().to_lowercase()));
 
     let version = attrs.get("version").map(|v| quote! { .version(#v) });
 
     let author = attrs.get("author").map(|a| quote! { .author(#a) });
-
-    let fields = match ast.body {
-        syn::Body::Struct(syn::VariantData::Unit) => {
-            Vec::new()
-        }
-        syn::Body::Struct(syn::VariantData::Struct(ref fields)) => {
-            fields.iter()
-                .map(|field| Field::from((field, field_attrs.get(field))))
-                .collect()
-        }
-        syn::Body::Struct(syn::VariantData::Tuple(_)) => {
-            panic!("#[derive(StompCommand)] is not supported on tuple structs")
-        }
-        syn::Body::Enum(_) => {
-            panic!("#[derive(StompCommand)] is not supported on enums")
-        }
-    };
 
     let args = expand_args(fields.iter().filter_map(|field| field.arg()));
     let subcommand = fields.iter()
@@ -88,17 +71,96 @@ fn expand_command(ast: &syn::MacroInput, attrs: &Attributes, field_attrs: &Field
     }
 }
 
-pub fn expand(ast: &syn::MacroInput, attrs: &Attributes, field_attrs: &FieldAttributes) -> quote::Tokens {
+fn expand_parse_arg(arg: &Arg, matches: &syn::Ident) -> quote::Tokens {
+    let ident = arg.ident;
+    let name = arg.name;
+    let value = if arg.is_counter {
+        quote! { #matches.occurrences_of(#name) }
+    } else {
+        if arg.takes_value {
+            if arg.required {
+                quote! { #matches.value_of(#name).unwrap().parse().unwrap() }
+            } else {
+                quote! { #matches.value_of(#name).map(|a| a.parse().unwrap()) }
+            }
+        } else {
+            quote! { #matches.is_present(#name) }
+        }
+    };
+
+    quote! {
+        #ident: #value
+    }
+}
+
+fn expand_parse_subcommand(cmd: &Subcommand, matches: &syn::Ident) -> quote::Tokens {
+    let ident = cmd.ident;
+    let ty = cmd.ty;
+
+    let (default, wrapper);
+    if cmd.required {
+        default = quote! { unreachable!() };
+        wrapper = None;
+    } else {
+        default = quote! { None };
+        wrapper = Some(quote! { Some });
+    }
+
+    quote! {
+        #ident: match #matches.subcommand() {
+            (name, Some(matches)) => #wrapper(<#ty as ::stomp::StompCommands>::parse(name, matches)),
+            (_, None) => #default,
+        }
+    }
+}
+
+fn expand_parse_field(field: &Field, matches: &syn::Ident) -> quote::Tokens {
+    match *field {
+        Field::Arg(ref arg) => expand_parse_arg(arg, matches),
+        Field::Subcommand(ref cmd) => expand_parse_subcommand(cmd, matches),
+    }
+}
+
+fn expand_parse(ast: &syn::MacroInput, fields: &[Field], matches: &syn::Ident) -> quote::Tokens {
     let name = &ast.ident;
-    let command = expand_command(ast, attrs, field_attrs);
+    let fields = fields.iter().map(|field| expand_parse_field(field, matches));
+    quote! {
+        #name {
+            #( #fields ),*
+        }
+    }
+}
+
+pub fn expand(ast: &syn::MacroInput, attrs: &Attributes, field_attrs: &FieldAttributes) -> quote::Tokens {
+    let fields = match ast.body {
+        syn::Body::Struct(syn::VariantData::Unit) => {
+            Vec::new()
+        }
+        syn::Body::Struct(syn::VariantData::Struct(ref fields)) => {
+            fields.iter()
+                .map(|field| Field::from((field, field_attrs.get(field))))
+                .collect()
+        }
+        syn::Body::Struct(syn::VariantData::Tuple(_)) => {
+            panic!("#[derive(StompCommand)] is not supported on tuple structs")
+        }
+        syn::Body::Enum(_) => {
+            panic!("#[derive(StompCommand)] is not supported on enums")
+        }
+    };
+
+    let ident = &ast.ident;
+    let command = expand_command(ast, attrs, &fields);
+    let matches = "matches".into(): syn::Ident;
+    let parse = expand_parse(ast, &fields, &matches);
     let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
     quote! {
-        impl #impl_generics ::stomp::StompCommand for #name #ty_generics #where_clause {
+        impl #impl_generics ::stomp::StompCommand for #ident #ty_generics #where_clause {
             fn command() -> ::clap::App<'static, 'static> {
                 #command
             }
-            fn parse(_matches: ::clap::ArgMatches) -> Self {
-                unimplemented!()
+            fn parse(#matches: &::clap::ArgMatches) -> Self {
+                #parse
             }
         }
     }

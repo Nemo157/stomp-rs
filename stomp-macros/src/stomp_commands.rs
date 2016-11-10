@@ -1,8 +1,6 @@
 use syn;
 use quote;
 
-use attrs::Attributes;
-
 pub fn expand_commands(ast: &syn::MacroInput) -> quote::Tokens {
     let commands: Vec<_> = match ast.body {
         syn::Body::Enum(ref variants) => {
@@ -41,7 +39,7 @@ pub fn expand(ast: &syn::MacroInput) -> quote::Tokens {
             fn commands() -> ::std::vec::Vec<::clap::App<'static, 'static>> {
                 #commands
             }
-            fn parse(_matches: ::clap::ArgMatches) -> Self {
+            fn parse(_name: &str, _matches: &::clap::ArgMatches) -> Self {
                 unimplemented!()
             }
         }

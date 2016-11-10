@@ -8,6 +8,7 @@ pub enum Field<'a> {
 }
 
 pub struct Arg<'a> {
+    pub ident: &'a syn::Ident,
     pub name: &'a str,
     pub short: Option<String>,
     pub long: Option<&'a str>,
@@ -17,9 +18,11 @@ pub struct Arg<'a> {
     pub takes_value: bool,
     pub is_counter: bool,
     pub multiple: bool,
+    pub required: bool,
 }
 
 pub struct Subcommand<'a> {
+    pub ident: &'a syn::Ident,
     pub ty: &'a syn::Ty,
     pub required: bool,
 }
@@ -45,7 +48,7 @@ impl<'a> Field<'a> {
 impl<'a> From<(&'a syn::Field, &'a Attributes)> for Field<'a> {
     fn from((field, attrs): (&'a syn::Field, &'a Attributes)) -> Field<'a> {
         if attrs.get_bool("subcommand") {
-            Field::Subcommand(Subcommand::from((field, attrs)))
+            Field::Subcommand(Subcommand::from(field))
         } else {
             Field::Arg(Arg::from((field, attrs)))
         }
@@ -72,18 +75,21 @@ impl<'a> From<(&'a syn::Field, &'a Attributes)> for Arg<'a> {
         let is_counter = attrs.get_bool("counted");
         let multiple = is_counter; // Or vec
 
-        let is_bool;
+        let (is_bool, required);
         match field.ty {
             syn::Ty::Path(None, ref path) => {
                 is_bool = path.clone() == "bool".into();
+                required = path.segments[0].ident != "Option";
             }
             syn::Ty::Path(..) => {
                 is_bool = false;
+                required = true;
             }
             _ => panic!("unsupported field type {:?}", field.ty),
         };
 
         Arg {
+            ident: field.ident.as_ref().unwrap(),
             name: name,
             short: short,
             long: long,
@@ -92,13 +98,14 @@ impl<'a> From<(&'a syn::Field, &'a Attributes)> for Arg<'a> {
             docs: &attrs.docs,
             is_counter: is_counter,
             multiple: multiple,
-            takes_value: attrs.get_bool("takes_value") || (!is_counter && !is_bool),
+            takes_value: !is_counter && !is_bool,
+            required: required,
         }
     }
 }
 
-impl<'a> From<(&'a syn::Field, &'a Attributes)> for Subcommand<'a> {
-    fn from((field, attrs): (&'a syn::Field, &'a Attributes)) -> Subcommand<'a> {
+impl<'a> From<&'a syn::Field> for Subcommand<'a> {
+    fn from(field: &'a syn::Field) -> Subcommand<'a> {
         let (required, ty);
         match field.ty {
             syn::Ty::Path(None, ref path) => {
@@ -121,6 +128,7 @@ impl<'a> From<(&'a syn::Field, &'a Attributes)> for Subcommand<'a> {
         };
 
         Subcommand {
+            ident: field.ident.as_ref().unwrap(),
             ty: ty,
             required: required,
         }

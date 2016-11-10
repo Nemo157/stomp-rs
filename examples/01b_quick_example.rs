@@ -47,7 +47,7 @@ pub struct MyApp {
 
     /// Turn debugging information on
     #[stomp(counted, short = 'd', long = "debug")]
-    debug_level: usize,
+    debug_level: u64,
 
     #[stomp(subcommand)]
     subcommand: Option<Commands>,
