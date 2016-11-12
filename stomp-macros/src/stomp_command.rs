@@ -191,12 +191,22 @@ pub fn expand(ast: &syn::MacroInput, attrs: &Attributes, field_attrs: &FieldAttr
     let command = expand_command(ast, attrs, &fields);
     let matches = "matches".into(): syn::Ident;
     let parse = expand_parse(ast, &fields, &matches);
+    let allow_unused = syn::Attribute {
+        style: syn::AttrStyle::Outer,
+        value: syn::MetaItem::List(syn::Ident::from("allow"), vec![
+            syn::NestedMetaItem::MetaItem(
+                syn::MetaItem::Word(syn::Ident::from("unused_variables"))
+            ),
+        ]),
+        is_sugared_doc: false,
+    };
     let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
     quote! {
         impl #impl_generics ::stomp::StompCommand for #ident #ty_generics #where_clause {
             fn command() -> ::clap::App<'static, 'static> {
                 #command
             }
+            #allow_unused
             fn parse(#matches: &::clap::ArgMatches) -> Self {
                 #parse
             }
