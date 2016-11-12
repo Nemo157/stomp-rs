@@ -104,7 +104,7 @@ impl<'a> From<(&'a syn::Field, &'a Attributes)> for Arg<'a> {
         let min_values = attrs.get("min_values").map(|a| a.into());
         let max_values = attrs.get("max_values").map(|a| a.into());
 
-        let required = !is_flag && !is_optional;
+        let required = !is_bool && !is_optional;
 
         Arg {
             ident: field.ident.as_ref().unwrap(),
