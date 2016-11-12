@@ -73,13 +73,33 @@ fn extract_attrs_inner(attrs: &mut Vec<syn::Attribute>) -> Attributes {
                     match *value {
                         syn::NestedMetaItem::MetaItem(ref item) => match *item {
                             syn::MetaItem::NameValue(ref name, ref value) => {
-                                stomps.insert(name.to_string(), (RefCell::new(0), Attribute::new(name.to_string(), value.clone())));
+                                let &mut (_, ref mut attr) = stomps.entry(name.to_string()).or_insert((RefCell::new(0), Attribute::new(name.to_string())));
+                                attr.push(value.clone());
                             }
                             syn::MetaItem::Word(ref name) => {
-                                stomps.insert(name.to_string(), (RefCell::new(0), Attribute::new(name.to_string(), syn::Lit::Bool(true))));
+                                let &mut (_, ref mut attr) = stomps.entry(name.to_string()).or_insert((RefCell::new(0), Attribute::new(name.to_string())));
+                                attr.push(syn::Lit::Bool(true));
                             }
-                            syn::MetaItem::List(..) => {
-                                panic!("Invalid stomp attribute {} unexpected sublist", quote!(#attr).to_string().replace(" ", ""));
+                            syn::MetaItem::List(ref ident, ref values) => {
+                                let &mut (_, ref mut attr) = stomps.entry(ident.as_ref().to_string()).or_insert((RefCell::new(0), Attribute::new(ident.as_ref().to_string())));
+                                for value in values {
+                                    match *value {
+                                        syn::NestedMetaItem::MetaItem(ref item) => match *item {
+                                            syn::MetaItem::Word(ref name) => {
+                                                attr.push(name.as_ref().into());
+                                            }
+                                            syn::MetaItem::NameValue(..) => {
+                                                panic!("Invalid stomp attribute {} named value in sublist not supported", quote!(#attr).to_string().replace(" ", ""));
+                                            }
+                                            syn::MetaItem::List(..) => {
+                                                panic!("Invalid stomp attribute {} sublist in sublist not supported", quote!(#attr).to_string().replace(" ", ""));
+                                            }
+                                        },
+                                        syn::NestedMetaItem::Literal(_) => {
+                                            panic!("Invalid stomp attribute {} literal value not supported", quote!(#attr).to_string().replace(" ", ""));
+                                        },
+                                    }
+                                }
                             }
                         },
                         syn::NestedMetaItem::Literal(_) => {

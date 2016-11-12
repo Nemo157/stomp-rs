@@ -83,6 +83,10 @@ fn expand_command(ast: &syn::MacroInput, attrs: &Attributes, fields: &[Field]) -
     let ref summary = attrs.summary;
     let ref docs = attrs.docs;
     let alias = attrs.get("alias").map(|a| quote! { .alias(#a) });
+    let global_settings = attrs.get("global_settings").map(|a| {
+        let settings = a.values().into_iter().map(syn::Ident::from);
+        quote! { .global_settings(&[#(::clap::AppSettings::#settings),*]) }
+    });
 
     quote! {
         ::clap::App::new(#name)
@@ -93,6 +97,7 @@ fn expand_command(ast: &syn::MacroInput, attrs: &Attributes, fields: &[Field]) -
             .about(#summary)
             .after_help(#docs)
             #alias
+            #global_settings
     }
 }
 
