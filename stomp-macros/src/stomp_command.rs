@@ -70,9 +70,17 @@ fn expand_command(ast: &syn::MacroInput, attrs: &Attributes, fields: &[Field]) -
     let name = attrs.get("name").map(|a| a.into())
             .unwrap_or_else(|| syn::Lit::from(ast.ident.as_ref().to_lowercase()));
 
-    let version = attrs.get("version").map(|v| quote! { .version(#v) });
+    let version = if attrs.get_bool("crate_version") {
+        Some(quote! { .version(crate_version!()) })
+    } else {
+        attrs.get("version").map(|a| quote! { .version(#a) })
+    };
 
-    let author = attrs.get("author").map(|a| quote! { .author(#a) });
+    let author = if attrs.get_bool("crate_authors") {
+        Some(quote! { .author(crate_authors!()) })
+    } else {
+        attrs.get("author").map(|a| quote! { .author(#a) })
+    };
 
     let args = expand_args(fields.iter().filter_map(|field| field.arg()));
     let subcommand = fields.iter()
