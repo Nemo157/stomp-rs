@@ -82,6 +82,7 @@ fn expand_command(ast: &syn::MacroInput, attrs: &Attributes, fields: &[Field]) -
 
     let ref summary = attrs.summary;
     let ref docs = attrs.docs;
+    let alias = attrs.get("alias").map(|a| quote! { .alias(#a) });
 
     quote! {
         ::clap::App::new(#name)
@@ -91,6 +92,7 @@ fn expand_command(ast: &syn::MacroInput, attrs: &Attributes, fields: &[Field]) -
             #subcommand
             .about(#summary)
             .after_help(#docs)
+            #alias
     }
 }
 
