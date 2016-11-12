@@ -1,8 +1,6 @@
 #![feature(proc_macro, proc_macro_lib)]
 #![feature(type_ascription)]
 
-#[macro_use]
-extern crate lazy_static;
 extern crate proc_macro;
 extern crate syn;
 #[macro_use]
@@ -19,6 +17,8 @@ pub fn stomp_command(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
     let mut ast = syn::parse_macro_input(&input.to_string()).unwrap();
     let (attrs, field_attrs) = attrs::extract_attrs(&mut ast);
     let expanded = stomp_command::expand(&ast, &attrs, &field_attrs);
+    attrs.check_used(ast.ident.as_ref(), None);
+    field_attrs.check_used(ast.ident.as_ref());
     quote!(#ast #expanded).to_string().parse().unwrap()
 }
 
