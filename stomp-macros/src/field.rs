@@ -131,7 +131,7 @@ impl<'a> From<&'a syn::Field> for Subcommand<'a> {
         let (is_optional, ty);
         match field.ty {
             syn::Ty::Path(None, ref path) => {
-                is_optional = path.segments[0].ident != "Option";
+                is_optional = path.segments[0].ident == "Option";
                 if is_optional {
                     if let syn::PathParameters::AngleBracketed(ref params) = path.segments[0].parameters {
                         ty = &params.types[0];
