@@ -12,7 +12,7 @@ fn expand_arg(arg: &Arg) -> quote::Tokens {
     let value_name = arg.value_name.map(|s| quote! { .value_name(#s) });
     let takes_value = arg.takes_value;
     let index = arg.index.map(|i| quote! { .index(#i) });
-    let ref docs = arg.docs;
+    let docs = (arg.summary.to_string() + "\n\n" + arg.docs).trim().to_string();
     let multiple = arg.multiple;
     let default_value = arg.default_value.map(|d| quote! { .default_value(#d) });
     let min_values = arg.min_values.map(|m| quote! { .min_values(#m) });
@@ -80,6 +80,7 @@ fn expand_command(ast: &syn::MacroInput, attrs: &Attributes, fields: &[Field]) -
         .find(|_| true)
         .map(expand_subcommand);
 
+    let ref summary = attrs.summary;
     let ref docs = attrs.docs;
 
     quote! {
@@ -88,7 +89,8 @@ fn expand_command(ast: &syn::MacroInput, attrs: &Attributes, fields: &[Field]) -
             #author
             #args
             #subcommand
-            .about(#docs)
+            .about(#summary)
+            .after_help(#docs)
     }
 }
 

@@ -5,10 +5,11 @@ use syn;
 use attr::Attribute;
 
 lazy_static! {
-    static ref EMPTY: Attributes = Attributes { docs: "".into(), map: BTreeMap::new() };
+    static ref EMPTY: Attributes = Attributes { summary: "".into(), docs: "".into(), map: BTreeMap::new() };
 }
 
 pub struct Attributes {
+    pub summary: String,
     pub docs: String,
     map: BTreeMap<String, Attribute>,
 }
@@ -73,7 +74,16 @@ fn extract_attrs_inner(attrs: &mut Vec<syn::Attribute>) -> Attributes {
         })
         .fold(String::new(), |docs, line| docs + line.trim_left_matches('/').trim() + "\n");
 
-    Attributes { docs: docs, map: stomps }
+    let index = docs.find("\n\n");
+    let (summary, docs) = if let Some(index) = index {
+        let (summary, docs) = docs.split_at(index);
+        let (_, docs) = docs.split_at(2);
+        (summary.into(), docs.into())
+    } else {
+        (docs, "".into())
+    };
+
+    Attributes { summary: summary, docs: docs, map: stomps }
 }
 
 /// Extracts all stomp attributes of the form #[stomp(i = V)]
